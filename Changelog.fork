@@ -1,0 +1,9 @@
+ChangeLog after forking from 1.5
+
+1.6 2010-11-27 - Fixed the item summary, which wasn't included due to a bug. 
+               - Removed ID3 dependency. 
+               - Automatic generation of episode titles.
+               - Added FILE_FILTER to make filtering large lists of MP3 files possible.
+1.7 2010-12-18 - Setting PODCAST_XML in dir2cast.ini allows you to automatically output the 
+                 generated XML to file, overwriting any previously existing XML files.
+               - FILE_FILTER now accepts wildcards

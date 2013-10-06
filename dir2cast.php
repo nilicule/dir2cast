@@ -56,8 +56,8 @@
 /* DEFAULTS *********************************************/
 
 // error handler needs these, so let's set them now.
-define('VERSION', '1.7.1');
-define('DIR2CAST_HOMEPAGE', 'http://www.ben-xo.com/dir2cast/');
+define('VERSION', '1.7 (forked)');
+define('DIR2CAST_HOMEPAGE', 'http://github.com/ben-xo/dir2cast');
 define('GENERATOR', 'dir2cast ' . VERSION . ' by Ben XO (' . DIR2CAST_HOMEPAGE . ')');
 
 error_reporting(E_ALL);
@@ -71,21 +71,10 @@ date_default_timezone_set( 'UTC' );
 
 function __autoload($class_name) 
 {
-	switch(strtolower($class_name))
-	{
-		case 'getid3':
-			
-			ErrorHandler::prime('getid3');
-			if(file_exists('getID3/getid3.php'))
-				require_once('getID3/getid3.php');
-			else
-				require_once('getid3/getid3.php');
-			ErrorHandler::defuse();
-			break;
-			
-		default:
-			require_once $class_name . '.php';
-	}
+  $class_name = strtolower($class_name);
+  if ($class_name != 'getid3') {
+    require_once $class_name . '.php';
+  }
 }
 
 /* CLASSES **********************************************/
@@ -126,71 +115,6 @@ interface Podcast_Helper {
 	public function appendToChannel(DOMElement $d, DOMDocument $doc);
 	public function appendToItem(DOMElement $d, DOMDocument $doc, RSS_Item $item);
 	public function addNamespaceTo(DOMElement $d, DOMDocument $doc);
-}
-
-/**
- * Uses external getID3 lib to analyze MP3 files.
- *
- */
-class getID3_Podcast_Helper implements Podcast_Helper {
-	
-	/**
-	 * getID3 analyzer
-	 *
-	 * @var getid3
-	 */
-	protected $getid3;
-	
-	public function appendToChannel(DOMElement $d, DOMDocument $doc) { /* nothing */ }
-	public function addNamespaceTo(DOMElement $d, DOMDocument $doc) { /* nothing */ }
-
-	/**
-	 * Fills in a bunch of info on the Item by using getid3->Analyze()
-	 */
-	public function appendToItem(DOMElement $d, DOMDocument $doc, RSS_Item $item)
-	{
-		if($item instanceof MP3_RSS_Item && !$item->getAnalyzed())
-		{
-			if(!isset($this->getid3))
-			{
-				$this->getid3 = new getid3();
-				$this->getid3->option_tag_lyrics3 = false;
-				$this->getid3->option_tag_apetag = false;
-				$this->getid3->encoding = 'UTF-8';
-			}
-			
-			try
-			{
-				$info = $this->getid3->Analyze($item->getFilename());
-			}
-			catch(getid3_exception $e)
-			{
-				// MP3 couldn't be analyzed.
-				return;
-			}
-			
-			if(!empty($info['bitrate']))
-				$item->setBitrate($info['bitrate']);
-
-			if(!empty($info['comments']))
-			{
-				if(!empty($info['comments']['title'][0]))
-					$item->setID3Title( $info['comments']['title'][0] );
-				if(!empty($info['comments']['artist'][0]))
-					$item->setID3Artist( $info['comments']['artist'][0] );
-				if(!empty($info['comments']['album'][0]))
-					$item->setID3Album( $info['comments']['album'][0] );
-				if(!empty($info['comments']['comment'][0]))
-					$item->setID3Comment( $info['comments']['comment'][0] );
-			}
-			
-			if(!empty($info['playtime_string']))
-				$item->setDuration( $info['playtime_string'] );
-			
-			$item->setAnalyzed(true);
-			unset($this->getid3);
-		}
-	}
 }
 
 class Atom_Podcast_Helper extends GetterSetter implements Podcast_Helper {
@@ -306,25 +230,10 @@ class iTunes_Podcast_Helper extends GetterSetter implements Podcast_Helper {
 		$elements = array(
 			'author' => $item->getID3Artist(),
 			'duration' => $item->getDuration(),
+			'subtitle' => $item->getID3Album(),
+			'summary' => $item->getSummary(),
 			//'keywords' => 'not supported yet.'
 		);
-
-		// iTunes summary is excluded if it's empty, because the default is to 
-		// duplicate what's in the "description field", but iTunes will fall back 
-		// to showing the <description> if there is no summary anyway.
-		$itunes_summary = $item->getSummary();
-		if($itunes_summary !== '')
-		{
-			$elements['summary'] = $itunes_summary;
-		}
-
-		// iTunes subtitle is excluded if it's empty. iTunes will fall back to
-		// the itunes:summary or description if there's no subtitle.
-		$itunes_subtitle = $item->getSubtitle();
-		if($itunes_subtitle !== '')
-		{
-			$elements['subtitle'] = $itunes_subtitle . ITUNES_SUBTITLE_SUFFIX;
-		}
 				
 		foreach($elements as $key => $val)
 			if(!empty($val))
@@ -501,9 +410,6 @@ class RSS_File_Item extends RSS_Item {
 	/**
 	 * Place a file with the same name but .txt instead of .<whatever> and the contents will be used
 	 * as the summary for the item in the podcast.
-	 * 
-	 * The summary appears in iTunes when you click the 'more info' icon, and can be
-	 * multiple lines long.
 	 *
 	 * @return String the summary, or null if there's no summary file
 	 */
@@ -511,23 +417,7 @@ class RSS_File_Item extends RSS_Item {
 	{
 		$summary_file_name = dirname($this->getFilename()) . '/' . basename($this->getFilename(), '.' . $this->getExtension()) . '.txt';
 		if(file_exists( $summary_file_name ))
-			return file_get_contents($summary_file_name);
-	}
-
-	/**
-	 * Place a file with the same name but .txt instead of .<whatever> and the contents will be used
-	 * as the subtitle for the item in the podcast.
-	 * 
-	 * The subtitle appears inline with the podcast item in iTunes, and has a 'more info' icon next
-	 * to it. It should be a single line.
-	 *
-	 * @return String the subtitle, or null if there's no subtitle file
-	 */
-	public function getSubtitle()
-	{
-		$summary_file_name = dirname($this->getFilename()) . '/' . basename($this->getFilename(), '.' . $this->getExtension()) . '_subtitle.txt';
-		if(file_exists( $summary_file_name ))
-			return file_get_contents($summary_file_name);
+			return preg_replace("/(^[\r\n]*|[\r\n]+)[\s\t]*[\r\n]+/", "", utf8_encode(file_get_contents($summary_file_name)));
 	}
 }
 
@@ -549,14 +439,17 @@ class MP3_RSS_Item extends RSS_File_Item {
 	
 	public function getTitle()
 	{
-		$title_parts = array();
-		if(LONG_TITLES)
-		{
-			if($this->getID3Album()) $title_parts[] = $this->getID3Album();
-			if($this->getID3Artist()) $title_parts[] = $this->getID3Artist();
-		}
-		if($this->getID3Title()) $title_parts[] = $this->getID3Title();
-		return implode(' - ', $title_parts);
+    // Auto generate the title of the podcast episode
+    $tempTitle = substr(basename($this->filename), 0, -4);
+
+    // Clean up the underscores and add some spacing
+    $tempTitle = preg_replace('/_/', ' ', $tempTitle);
+    $tempTitle = preg_replace('/(\w)\-(\w)/', '$1 - $2', $tempTitle);
+
+    // Add the pound before the episode number
+    $tempTitle = preg_replace('/(\d+)/', '#$1', $tempTitle);
+
+    return $tempTitle;
 	}
 	
 	public function getType()
@@ -566,29 +459,15 @@ class MP3_RSS_Item extends RSS_File_Item {
 	
 	public function getDescription()
 	{
-		return $this->getID3Comment();
+    // Until we come up with something better, we'll use a somewhat static description
+		$description = EPISODE_DESCRIPTION;
+    return $description;
 	}
 	
 	public function getSummary()
 	{
 		$summary = parent::getSummary();
-		if(null == $summary && !LONG_TITLES)
-		{
-			// use description as summary if there's no file-based override
-			$summary = $this->getDescription();
-		}
-		return $summary;
-	}
-
-	public function getSubtitle()
-	{
-		$subtitle = parent::getSubtitle();
-		if(null == $subtitle && !LONG_TITLES)
-		{
-			// use artist as summary if there's no file-based override
-			$subtitle = $this->getID3Artist();
-		}
-		return $subtitle;
+    return $summary;
 	}
 }
 
@@ -657,9 +536,9 @@ abstract class Podcast extends GetterSetter
 			'lastBuildDate' => $this->getLastBuildDate(),
 			'language' => $this->getLanguage(),
 			'copyright' => $this->getCopyright(),
-			'generator' => $this->getGenerator(),
-			'webMaster' => $this->getWebMaster(),
-			'ttl' => $this->getTtl()
+			'generator' => $this->getGenerator()
+//			'webMaster' => $this->getWebMaster(),
+//			'ttl' => $this->getTtl()
 		);
 				
 		foreach($channel_elements as $name => $val)
@@ -746,13 +625,26 @@ class Dir_Podcast extends Podcast
 			$this->pre_scan();
 			
 			// scan the dir
-
 			$di = new DirectoryIterator($this->source_dir);
 			
 			$item_count = 0;
 			foreach($di as $file)
 			{
-				$item_count = $this->addItem($file->getPath() . '/' . $file->getFileName());
+        if(defined('FILE_FILTER')) {
+          if (fnmatch(FILE_FILTER, $file->getFileName())) {
+            $tmpFilename = $file->getFileName();
+            $tmpFilepath = $file->getPath();
+            $tmpFullPath = $file->getPath() . '/' . $file->getFileName();
+
+     				$item_count = $this->addItem($tmpFullPath);
+          }
+        } else {
+          $tmpFilename = $file->getFileName();
+          $tmpFilepath = $file->getPath();
+          $tmpFullPath = $file->getPath() . '/' . $file->getFileName();
+
+  				$item_count = $this->addItem($tmpFullPath);
+        }
 			}
 			
 			if(0 == $item_count)
@@ -771,23 +663,27 @@ class Dir_Podcast extends Podcast
 		else
 			$file_ext = substr($filename, $pos + 1);
 
-		switch(strtolower($file_ext))
-		{
-			case 'mp3':
-				// skip 0-length mp3 files. getID3 chokes on them.
-				if(filesize($filename))
-				{
-					// one array per mtime, just in case several MP3s share the same mtime.
-					$filemtime = filemtime($filename);
-					$the_item = new MP3_RSS_Item($filename);
-					$this->unsorted_items[$filemtime][] = $the_item;
-					if($filemtime > $this->max_mtime)
-						$this->max_mtime = $filemtime;
-				}
-				break;
-				
-			default:
-		}
+    if (strtolower($file_ext) == 'mp3') {
+      // Otherwise just add the mp3 file to our XML feed
+ 			if(filesize($filename))	{
+   			// one array per mtime, just in case several MP3s share the same mtime.
+	  		$filemtime = filemtime($filename);
+		  	$the_item = new MP3_RSS_Item($filename);
+			  $this->unsorted_items[$filemtime][] = $the_item;
+  			if($filemtime > $this->max_mtime)
+					$this->max_mtime = $filemtime;
+	   	}
+    } elseif (strtolower($file_ext) == 'm4a') {
+      // Otherwise just add the mp3 file to our XML feed
+ 			if(filesize($filename))	{
+  			// one array per mtime, just in case several MP3s share the same mtime.
+	  		$filemtime = filemtime($filename);
+		  	$the_item = new MP3_RSS_Item($filename);
+			  $this->unsorted_items[$filemtime][] = $the_item;
+ 				if($filemtime > $this->max_mtime)
+ 					$this->max_mtime = $filemtime;
+  		}
+    }
 		
 		return count($this->unsorted_items);
 	}
@@ -1008,9 +904,6 @@ class ErrorHandler
 		{
 			case 'ini':
 				return 'Suggestion: Make sure that your ini file is valid. If the error is on a specific line, try enclosing the value in "quotes".';
-			
-			case 'getid3':
-				return 'dir2cast requires getID3. You should download this from <a href="' . DIR2CAST_HOMEPAGE . '">' . DIR2CAST_HOMEPAGE .'</a> and install it with dir2cast.';
 		}
 	}
 	
@@ -1088,7 +981,7 @@ class SettingsHandler
 		if(file_exists( dirname(__FILE__) . '/dir2cast.ini' ))
 		{
 			self::load_from_ini(dirname(__FILE__) . '/dir2cast.ini' );
-			self::finalize(array('TMP_DIR', 'MP3_BASE', 'MP3_DIR', 'MP3_URL', 'MIN_CACHE_TIME', 'FORCE_PASSWORD'));
+			self::finalize(array('TMP_DIR', 'MP3_BASE', 'MP3_DIR', 'MP3_URL', 'MIN_CACHE_TIME', 'FORCE_PASSWORD', 'FILE_FILTER'));
 		}
 		
 		if(!defined('TMP_DIR'))
@@ -1257,8 +1150,11 @@ class SettingsHandler
 		if(!defined('LONG_TITLES'))
 			define('LONG_TITLES', false);
 
-		if(!defined('ITUNES_SUBTITLE_SUFFIX'))
-			define('ITUNES_SUBTITLE_SUFFIX', '');
+		if(!defined('FILE_FILTER'))
+			define('FILE_FILTER', 'tech_rework');
+
+		if(!defined('EPISODE_DESCRIPTION'))
+			define('EPISODE_DESCRIPTION', DESCRIPTION);
 	}
 	
 	public static function load_from_ini($file)
@@ -1288,6 +1184,57 @@ class SettingsHandler
 
 /* FUNCTIONS **********************************************/
 
+if (!function_exists('fnmatch')) { 
+  define('FNM_PATHNAME', 1); 
+  define('FNM_NOESCAPE', 2); 
+  define('FNM_PERIOD', 4); 
+  define('FNM_CASEFOLD', 16); 
+        
+  function fnmatch($pattern, $string, $flags = 0) { 
+    return pcre_fnmatch($pattern, $string, $flags); 
+  } 
+} 
+    
+function pcre_fnmatch($pattern, $string, $flags = 0) { 
+  $modifiers = null; 
+  $transforms = array( 
+    '\*'    => '.*', 
+    '\?'    => '.', 
+    '\[\!'    => '[^', 
+    '\['    => '[', 
+    '\]'    => ']', 
+    '\.'    => '\.', 
+    '\\'    => '\\\\' 
+  ); 
+        
+  // Forward slash in string must be in pattern: 
+  if ($flags & FNM_PATHNAME) { 
+    $transforms['\*'] = '[^/]*'; 
+  } 
+        
+  // Back slash should not be escaped: 
+  if ($flags & FNM_NOESCAPE) { 
+    unset($transforms['\\']); 
+  } 
+        
+  // Perform case insensitive match: 
+  if ($flags & FNM_CASEFOLD) { 
+    $modifiers .= 'i'; 
+  } 
+        
+  // Period at start must be the same as pattern: 
+  if ($flags & FNM_PERIOD) { 
+    if (strpos($string, '.') === 0 && strpos($pattern, '.') !== 0) return false; 
+  } 
+        
+  $pattern = '#^' 
+    . strtr(preg_quote($pattern, '#'), $transforms) 
+    . '$#' 
+    . $modifiers; 
+        
+  return (boolean)preg_match($pattern, $string); 
+} 
+
 /**
  * Strips slashes from a string if magic quotes GPC is enabled; otherwise it's a NO-OP.
  *
@@ -1296,7 +1243,8 @@ class SettingsHandler
  */
 function magic_stripslashes($s) 
 { 
-	return get_magic_quotes_gpc() ? stripslashes($s) : $s;
+	// return get_magic_quotes_gpc() ? stripslashes($s) : $s;
+	return $s;
 }
 
 /*
@@ -1325,12 +1273,14 @@ if(!defined('NO_DISPATCHER'))
 	{
 		$podcast->uncache();	
 	}
+
+  // Force cache clear
+	$podcast->uncache();	
 	
 	if(!$podcast->isCached())
 	{
 		SettingsHandler::defaults();
 		
-		$getid3 = $podcast->addHelper(new getID3_Podcast_Helper());
 		$atom   = $podcast->addHelper(new Atom_Podcast_Helper());
 		$itunes = $podcast->addHelper(new iTunes_Podcast_Helper());
 		
@@ -1360,7 +1310,16 @@ if(!defined('NO_DISPATCHER'))
 	
 	$podcast->http_headers();
 	
-	echo $podcast->generate();
+  if(defined('PODCAST_XML')) {
+    if(file_exists( PODCAST_XML )) {
+      unlink(PODCAST_XML);
+      file_put_contents(PODCAST_XML, $podcast->generate());
+    } else {
+      file_put_contents(PODCAST_XML, $podcast->generate());
+    }
+  } else {
+    echo $podcast->generate();
+  }
 }
 
 /* THE END *********************************************/

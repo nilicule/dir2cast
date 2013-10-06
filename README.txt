@@ -1,4 +1,4 @@
-dir2cast by Ben XO v1.7.1 (2011-02-17)
+dir2cast by Ben XO v1.5 (2010-07-31)
 ================================================================================
 
 http://www.ben-xo.com/dir2cast
@@ -32,10 +32,12 @@ Features:
 * RSS Description, iTunes Subtitle and iTunes Summary can be set by dropping
   files named description.txt, itunes_subtitle.txt and itunes_summary.txt 
   in the same folder as dir2cast.php - but they are not required. (You can
-  also set these in the config).
+  also set these in the script).
 
 * You can set a per-file iTunes Summary by creating a text file with the same
   name as the MP3 (e.g. for file.mp3, create file.txt).
+
+* Works from the command line, if you want.
 
 
 REQUIREMENTS
@@ -46,8 +48,8 @@ dir2cast requires PHP 5.1.
 dir2cast makes use of getID3 by James Heinrich & Allan Hansen, although it does
 not require the whole thing. A cut down version of getID3 is supplied at
 http://www.ben-xo.com/dir2cast. You will need to download this and install it
-with dir2cast.php. The full version of getID3 is available at 
-http://getid3.sourceforge.net/ .
+with dir2cast.php. (It is not bundled in the same file for licensing reasons.
+The full version of getID3 is available at http://getid3.sourceforge.net/ ).
 
 
 INSTALLATION
@@ -151,20 +153,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 HISTORY
 ================================================================================
 
-1.7.1 11-02-17 Remove unused mpc_old code from getID3, which false-positived
-               on one of my MP3s.
-1.7 2010-12-10 <itunes:summary> is now excluded if it's not explicitly set, as
-               iTunes will happily fall back to the <description> and there's
-               no point duplicating this. Changed <itunes:subtitle> to pull from
-               ID3 Artist field, rather than ID3 Album field, as this is more
-               useful for me. <itunes:subtitle> can now be set with a file in
-               the same was as <itunes:summary>. Also added new INI parameter
-               ITUNES_SUBTITLE_SUFFIX, which is appended to the subtitle of 
-               every item. I suggest using this for an appropriate 'Click here
-               for more info!' message, to lead people to the description or
-               summary.
-1.6 2010-11-27 Fix bug including summary info from either ID3 album field
-               or filename.txt reported by Nilicule. Thanks!
 1.5 2010-07-31 Add optional RSS <image> tag. This is not the same as the 
                <itunes:image> tag, as it has size restrictions. 
 1.4 2010-03-10 Make <description> in a CDATA section
